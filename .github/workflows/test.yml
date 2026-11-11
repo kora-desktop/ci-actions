@@ -1,0 +1,59 @@
+name: test
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  git-auth:
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS runners ship bash 3.2, which git-auth.sh must keep working on.
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./git-auth
+        with:
+          client-id: ${{ vars.CI_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
+      # This repository is public, so the checks pick private repositories at run time and log no names.
+      - name: Reach private repositories in every URL form
+        shell: bash
+        run: |
+          set -uo pipefail
+          d=$RUNNER_TEMP/git-auth
+          status=0
+          check() {
+            if git ls-remote "$2" HEAD >/dev/null 2>&1; then echo "ok    $1"; else echo "FAIL  $1"; status=1; fi
+          }
+          for org in kora-desktop humain-os playtron-os; do
+            name=$(awk -F '\t' -v o="$org" '$2 == o && $3 == 0 && $5 == 1 { print $1; exit }' "$d/repos.tsv")
+            if [ -z "$name" ]; then echo "skip  no private repository in $org"; continue; fi
+            check "$org, ssh://" "ssh://git@github.com/$org/$name.git"
+            check "$org, ssh:// with :22" "ssh://git@github.com:22/$org/$name.git"
+            check "$org, git@" "git@github.com:$org/$name.git"
+          done
+          moved=$(awk -F '\t' '$2 != "playtron-os" && $3 == 0 && $5 == 1 { print $1; exit }' "$d/repos.tsv")
+          check "moved repository by its old playtron-os URL" "ssh://git@github.com/playtron-os/$moved.git"
+          old=$(awk -F '\t' 'NR == FNR { home[$1]; next } ($2 in home) && !($1 in home) { print $1; exit }' "$d/homes.tsv" "$d/renames.tsv")
+          if [ -n "$old" ]; then check "renamed repository by its old name" "ssh://git@github.com/playtron-os/$old.git"; else echo "skip  no rename list"; fi
+          exit $status
+      - name: Leave the job's own https remote alone, so pushes keep the workflow token
+        shell: bash
+        run: |
+          url=$(git remote get-url origin)
+          [[ $url == https://github.com/* ]] || { echo "origin was rewritten"; exit 1; }
+          echo "ok    origin untouched"
+      - name: Same config inside a container, the way docker:run mounts it
+        if: runner.os == 'Linux'
+        run: |
+          name=$(awk -F '\t' '$2 == "kora-desktop" && $3 == 0 && $5 == 1 { print $1; exit }' "$RUNNER_TEMP/git-auth/repos.tsv")
+          docker run --rm -v "$GIT_AUTH_CONFIG:/etc/gitconfig:ro" alpine/git \
+            ls-remote "ssh://git@github.com/kora-desktop/$name.git" HEAD >/dev/null 2>&1
+          echo "ok    inside a container"

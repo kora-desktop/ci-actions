@@ -1,0 +1,44 @@
+name: git-auth
+description: >-
+  Fetch private repositories in kora-desktop, humain-os and playtron-os over HTTPS with
+  kora-desktop-ci app tokens, including the old playtron-os URLs of repositories that were
+  renamed or moved.
+inputs:
+  client-id:
+    description: Client ID of the kora-desktop-ci GitHub App, the org variable CI_APP_CLIENT_ID.
+    required: true
+  private-key:
+    description: Private key of the kora-desktop-ci GitHub App, the org secret CI_APP_PRIVATE_KEY.
+    required: true
+outputs:
+  config:
+    description: Path of the generated git config, also exported as GIT_AUTH_CONFIG.
+    value: ${{ steps.write.outputs.config }}
+runs:
+  using: composite
+  steps:
+    - id: kora_desktop
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: kora-desktop
+    - id: humain_os
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: humain-os
+    - id: playtron_os
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: playtron-os
+    - id: write
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/git-auth.sh"'
+      env:
+        TOKEN_KORA_DESKTOP: ${{ steps.kora_desktop.outputs.token }}
+        TOKEN_HUMAIN_OS: ${{ steps.humain_os.outputs.token }}
+        TOKEN_PLAYTRON_OS: ${{ steps.playtron_os.outputs.token }}
