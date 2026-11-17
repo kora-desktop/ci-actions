@@ -23,3 +23,24 @@ Lets a job fetch private repositories in those three orgs, with no SSH key and n
 To build in Docker, mount the config as the container's system git config: `-v "$GIT_AUTH_CONFIG:/etc/gitconfig:ro"`. The file is readable only by the runner user, so run the container as that user (`--user $(id -u):$(id -g)`).
 
 It runs on Linux and macOS runners (bash 3.2 and later). The tokens expire after an hour and are revoked when the job ends.
+
+## goldens
+
+Publishes the golden images a test run drew to the shared golden store and writes the job summary: before, after and difference thumbnails for every capture the change adds or alters, a link to the full report, and the captures that failed. It runs `icetron-golden publish` from the icetron commit the repository's `Cargo.lock` pins, and caches that build. See icetron's `docs/goldens-store.md`.
+
+The tests must run with `ICETRON_GOLDEN_KEEP=all` and leave their frames in `~/.cache/icetron-golden` on the runner (mount it into the build container). Run it after the tests, whether they passed or not, and give the job `id-token: write`:
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+steps:
+  # ... git-auth, then the tests with ICETRON_GOLDEN_KEEP=all
+  - uses: kora-desktop/ci-actions/goldens@v1
+    if: ${{ !cancelled() }}
+    with:
+      role-arn: ${{ vars.GOLDENS_WRITER_ROLE_ARN }}
+      bucket: ${{ vars.GOLDENS_BUCKET }}
+```
+
+The store's address comes from the repository's `goldens.toml`. The base defaults to the pull request's base, or to the commit a push replaced. Pull requests from forks get no OIDC token, so they cannot publish.
