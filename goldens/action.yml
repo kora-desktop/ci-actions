@@ -1,0 +1,62 @@
+name: goldens
+description: >-
+  Publish the golden images a test run drew to the shared golden store and write the
+  before/after summary, with `icetron-golden publish` at the commit the caller's Cargo.lock pins.
+inputs:
+  role-arn:
+    description: The store's writer role, assumed with GitHub's OIDC token (the org variable GOLDENS_WRITER_ROLE_ARN).
+    required: true
+  bucket:
+    description: The store's bucket (the org variable GOLDENS_BUCKET).
+    required: true
+  region:
+    description: The bucket's AWS region.
+    default: us-west-2
+  base:
+    description: >-
+      The commit to compare with. Defaults to the pull request's base, or the commit a push to
+      a branch replaced.
+    default: ""
+  working-directory:
+    description: The repository's root, where goldens.toml and Cargo.lock are.
+    default: .
+runs:
+  using: composite
+  steps:
+    - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      with:
+        role-to-assume: ${{ inputs.role-arn }}
+        aws-region: ${{ inputs.region }}
+        role-session-name: goldens-${{ github.run_id }}
+
+    - id: find
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        BASE: ${{ inputs.base }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        BEFORE: ${{ github.event.before }}
+      run: '"$GITHUB_ACTION_PATH/find.sh"'
+
+    - id: bin
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/icetron-golden-bin
+        key: icetron-golden-${{ runner.os }}-${{ runner.arch }}-${{ steps.find.outputs.rev }}
+
+    - name: Install icetron-golden
+      if: steps.bin.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      run: >-
+        cargo install --quiet --locked --git '${{ steps.find.outputs.source }}'
+        --rev '${{ steps.find.outputs.rev }}' --features cli
+        --root ~/.cache/icetron-golden-bin icetron-golden
+
+    - name: Publish
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        GOLDENS_BUCKET: ${{ inputs.bucket }}
+      run: ~/.cache/icetron-golden-bin/bin/icetron-golden publish '${{ steps.find.outputs.base }}'
