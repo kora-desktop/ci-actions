@@ -26,7 +26,7 @@ It runs on Linux and macOS runners (bash 3.2 and later). The tokens expire after
 
 ## goldens
 
-Publishes the golden images a test run drew to the shared golden store and writes the job summary: before, after and difference thumbnails for every capture the change adds or alters, a link to the full report, and the captures that failed. It runs `icetron-golden publish` from the icetron commit the repository's `Cargo.lock` pins, and caches that build. See icetron's `docs/goldens-store.md`.
+Publishes the golden images a test run drew to the shared golden store and writes the job summary: before, after and difference thumbnails for every capture the change adds or alters, a link to the full report, and the captures that failed. It runs `icetron-golden publish` from the icetron commit the repository's `Cargo.lock` pins, and caches that build. Where the lock takes `icetron-golden` from a path instead (icetron itself, or a vendored icetron checkout), it builds the crate found in the checkout, cached by the crate's git tree. See icetron's `docs/goldens-store.md`.
 
 The tests must run with `ICETRON_GOLDEN_KEEP=all` and leave their frames in `~/.cache/icetron-golden` on the runner (mount it into the build container). Run it after the tests, whether they passed or not, and give the job `id-token: write`:
 
