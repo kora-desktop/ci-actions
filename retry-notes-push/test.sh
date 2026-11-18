@@ -9,6 +9,9 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 fail() { echo "FAIL  $*"; exit 1; }
+# PATH without any copy of the wrapper, such as the one the action installs in CI.
+base=$(printf '%s\n' "$PATH" | tr : '\n' | while read -r d; do head -c 100 "$d/git" 2>/dev/null | grep -q "retry-notes-push wrapper" || printf '%s:' "$d"; done)
+base=${base%:}
 
 npm install --prefix "$tmp/sr" --no-audit --no-fund --loglevel=error \
   "semantic-release@${SEMANTIC_RELEASE:-25}" @semantic-release/changelog @semantic-release/git >/dev/null
@@ -56,7 +59,7 @@ EOF
 
 # release <name> <PATH prefix>: semantic-release outside any CI, the way `task release` runs it.
 release() {
-  env -i HOME="$tmp" PATH="$2$PATH" CI=true GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid \
+  env -i HOME="$tmp" PATH="$2$base" CI=true GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid \
     GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid \
     RETRY_NOTES_PUSH_DELAY=1 RETRY_NOTES_PUSH_ATTEMPTS=4 \
     "$tmp/sr/node_modules/.bin/semantic-release" --no-ci --repository-url "file://$tmp/$1.git"

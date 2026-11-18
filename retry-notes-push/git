@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# git, except that a push of refs/notes/* waits and retries. GitHub sometimes loses a push that
-# arrives a second after the previous one, and pushing the same notes ref again is harmless.
+# retry-notes-push wrapper: git, except that a push of refs/notes/* waits and retries.
+# GitHub sometimes loses a push that arrives a second after the previous one, and pushing
+# the same notes ref again is harmless.
 set -u
 
-self=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 real=
 IFS=: read -r -a dirs <<<"$PATH"
 for d in "${dirs[@]}"; do
   [[ -n $d && -f $d/git && -x $d/git ]] || continue
-  [[ $(cd "$d" 2>/dev/null && pwd -P) == "$self" ]] && continue
+  # Skip this wrapper and any other copy of it.
+  head -c 100 "$d/git" | grep -q "retry-notes-push wrapper" && continue
   real=$d/git
   break
 done
