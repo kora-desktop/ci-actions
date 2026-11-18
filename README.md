@@ -44,3 +44,15 @@ steps:
 ```
 
 The store's address comes from the repository's `goldens.toml`. The base defaults to the pull request's base, or to the commit a push replaced. Pull requests from forks get no OIDC token, so they cannot publish.
+
+## retry-notes-push
+
+Makes semantic-release's notes push wait a moment and retry. semantic-release pushes three times within about two seconds: the release commit, the `vX` tag, then `refs/notes/semantic-release-vX`. GitHub sometimes loses that last push, which comes a second after the tag push. It answers `missing necessary objects`, `(failed)` or `fatal error in commit_refs`, and the release stops with the tag pushed but no GitHub release.
+
+The action puts a `git` wrapper first on `PATH` for the rest of the job. For a `git push` whose last argument is a `refs/notes/` ref, the wrapper waits `delay` seconds, then pushes, doubling the wait after each failure, up to `attempts` tries. Pushing the same notes ref again is harmless. Every other git command runs once, unchanged. Add it to the job that runs semantic-release, before that step:
+
+```yaml
+- uses: kora-desktop/ci-actions/retry-notes-push@v1
+```
+
+`retry-notes-push/test.sh` reproduces the failure with a local repository whose hooks lose such a push, then shows the release completing with the wrapper.

@@ -57,3 +57,25 @@ jobs:
           docker run --rm -v "$GIT_AUTH_CONFIG:/etc/gitconfig:ro" alpine/git \
             ls-remote "ssh://git@github.com/kora-desktop/$name.git" HEAD >/dev/null 2>&1
           echo "ok    inside a container"
+  retry-notes-push:
+    strategy:
+      fail-fast: false
+      matrix:
+        semantic-release: ["24", "25"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: ./retry-notes-push
+      - name: The wrapper comes first on PATH and passes other commands through
+        run: |
+          [ "$(command -v git)" = "$RUNNER_TEMP/retry-notes-push/bin/git" ] || { echo "git is $(command -v git)"; exit 1; }
+          git --version
+      - name: A lost notes push no longer stops semantic-release
+        env:
+          SEMANTIC_RELEASE: ${{ matrix.semantic-release }}
+        run: retry-notes-push/test.sh
