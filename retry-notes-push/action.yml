@@ -1,0 +1,26 @@
+name: retry-notes-push
+description: >-
+  Make semantic-release's push of its refs/notes/semantic-release-vX ref wait a moment and retry,
+  so a push GitHub loses right after the tag push no longer leaves a tag without a release.
+inputs:
+  attempts:
+    description: How many times to try each notes push.
+    default: "4"
+  delay:
+    description: Seconds to wait before the first try, doubled after each failure.
+    default: "5"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        bin=$RUNNER_TEMP/retry-notes-push/bin
+        mkdir -p "$bin"
+        cp "$GITHUB_ACTION_PATH/git" "$bin/git"
+        chmod +x "$bin/git"
+        echo "$bin" >>"$GITHUB_PATH"
+        echo "RETRY_NOTES_PUSH_ATTEMPTS=$ATTEMPTS" >>"$GITHUB_ENV"
+        echo "RETRY_NOTES_PUSH_DELAY=$DELAY" >>"$GITHUB_ENV"
+      env:
+        ATTEMPTS: ${{ inputs.attempts }}
+        DELAY: ${{ inputs.delay }}

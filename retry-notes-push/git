@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# git, except that a push of refs/notes/* waits and retries. GitHub sometimes loses a push that
+# arrives a second after the previous one, and pushing the same notes ref again is harmless.
+set -u
+
+self=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+real=
+IFS=: read -r -a dirs <<<"$PATH"
+for d in "${dirs[@]}"; do
+  [[ -n $d && -f $d/git && -x $d/git ]] || continue
+  [[ $(cd "$d" 2>/dev/null && pwd -P) == "$self" ]] && continue
+  real=$d/git
+  break
+done
+[[ -n $real ]] || { echo "retry-notes-push: no git on PATH besides this wrapper" >&2; exit 127; }
+
+if [[ $# -lt 2 || $1 != push || ${!#} != *refs/notes/* ]]; then
+  exec "$real" "$@"
+fi
+
+attempts=${RETRY_NOTES_PUSH_ATTEMPTS:-4}
+delay=${RETRY_NOTES_PUSH_DELAY:-5}
+i=1
+while :; do
+  sleep "$delay"
+  "$real" "$@" && exit 0
+  status=$?
+  if ((i >= attempts)); then
+    echo "retry-notes-push: git push failed $i times, giving up" >&2
+    exit "$status"
+  fi
+  delay=$((delay * 2))
+  echo "retry-notes-push: git push failed (attempt $i of $attempts), retrying in ${delay}s" >&2
+  i=$((i + 1))
+done
