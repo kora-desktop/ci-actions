@@ -49,10 +49,17 @@ runs:
       shell: bash
       env:
         CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-      run: >-
-        cargo install --quiet --locked --git '${{ steps.find.outputs.source }}'
-        --rev '${{ steps.find.outputs.rev }}' --features cli
-        --root ~/.cache/icetron-golden-bin icetron-golden
+        CRATE_PATH: ${{ steps.find.outputs.path }}
+        SOURCE: ${{ steps.find.outputs.source }}
+        REV: ${{ steps.find.outputs.rev }}
+      run: |
+        if [ -n "$CRATE_PATH" ]; then
+          cargo install --quiet --locked --path "$CRATE_PATH" --features cli \
+            --root ~/.cache/icetron-golden-bin
+        else
+          cargo install --quiet --locked --git "$SOURCE" --rev "$REV" --features cli \
+            --root ~/.cache/icetron-golden-bin icetron-golden
+        fi
 
     - name: Publish
       shell: bash
